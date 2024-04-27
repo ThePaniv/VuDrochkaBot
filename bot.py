@@ -1,7 +1,9 @@
 import logging
 import discord
 from discord.ext import commands
+
 from configs import VuDrochkaBotConfigs
+from cogs.voice_channel.voice_join_greeting import VoiceJoinGreetingsCog
 from cogs.voice_channel.voice_state_update_cog import VoiceStateUpdateCog
 
 
@@ -13,6 +15,8 @@ class VuDrochkaBot(commands.Bot):
 
     async def setup_hook(self):
         await self.add_cog(VoiceStateUpdateCog(self))
+        if VuDrochkaBotConfigs.VOICE:
+            await self.add_cog(VoiceJoinGreetingsCog(self))
         self.logger.info("Setup tasks complete.")
 
     async def on_ready(self):
@@ -21,5 +25,7 @@ class VuDrochkaBot(commands.Bot):
 
 
 if __name__ == '__main__':
-    bot = VuDrochkaBot(command_prefix='!')
+    bot_intents = discord.Intents.default()
+    bot_intents.message_content = True
+    bot = VuDrochkaBot(command_prefix='!', intents=bot_intents)
     bot.run(VuDrochkaBotConfigs.BOT_TOKEN)

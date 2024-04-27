@@ -12,3 +12,4 @@ class VuDrochkaBotConfigs:
     DISCORD_API_URL = os.environ.get("DISCORD_API_URL", "https://discord.com/api/v9")
     DISCORD_WEB_USER_TOKEN = os.environ.get("DISCORD_WEB_USER_TOKEN")
     BOT_TOKEN = os.environ.get("BOT_TOKEN")
+    VOICE = os.environ.get("BOT_VOICE") == 'true'
