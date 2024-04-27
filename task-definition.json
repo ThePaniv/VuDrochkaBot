@@ -4,7 +4,7 @@
     "executionRoleArn": "arn:aws:iam::126568927381:role/ecsTaskExecutionRole",
     "containerDefinitions": [
         {
-            "name": "VuDrochkaBot",
+            "name": "vudrochka-bot",
             "image": "126568927381.dkr.ecr.eu-central-1.amazonaws.com/vudrochka-bot:latest",
             "cpu": 256,
             "memory": 512,
