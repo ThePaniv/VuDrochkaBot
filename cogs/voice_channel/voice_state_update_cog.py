@@ -19,9 +19,9 @@ class VoiceStateUpdateCog(commands.Cog):
             new_name = amount_of_members * ":otter:" + self.ending_mapping[str(amount_of_members)]
             successful = await self.edit_channel_status(str(channel.id), new_name)
             if successful:
-                self.bot.logger.info(f'Changed voice channel name to "{new_name}"')
+                self.bot.logger.info(f'Changed voice channel name to "{new_name}" for {channel.name}')
             else:
-                self.bot.logger.info(f'Can`t change voice channel name to "{new_name}"')
+                self.bot.logger.info(f'Can`t change voice channel name to "{new_name}" for {channel.name}')
 
     async def edit_channel_status(self, channel_id, new_name):
         url = f"{VuDrochkaBotConfigs.DISCORD_API_URL}/channels/{channel_id}/voice-status"
