@@ -1,0 +1,26 @@
+{
+    "family": "Vudrochka-TD",
+    "networkMode": "awsvpc",
+    "executionRoleArn": "arn:aws:iam::126568927381:role/ecsTaskExecutionRole",
+    "containerDefinitions": [
+        {
+            "name": "VuDrochkaBot",
+            "image": "126568927381.dkr.ecr.eu-central-1.amazonaws.com/vudrochka-bot:latest",
+            "cpu": 256,
+            "memory": 512,
+            "essential": true,
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-create-group": "true",
+                    "awslogs-group": "/ecs/Vudrochka-TD",
+                    "awslogs-region": "eu-central-1",
+                    "awslogs-stream-prefix": "ecs"
+                }
+            }
+        }
+    ],
+    "requiresCompatibilities": ["FARGATE"],
+    "cpu": "256",
+    "memory": "512"
+}
