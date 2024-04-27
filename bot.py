@@ -25,5 +25,7 @@ class VuDrochkaBot(commands.Bot):
 
 
 if __name__ == '__main__':
-    bot = VuDrochkaBot(command_prefix='!')
+    bot_intents = discord.Intents.default()
+    bot_intents.message_content = True
+    bot = VuDrochkaBot(command_prefix='!', intents=bot_intents)
     bot.run(VuDrochkaBotConfigs.BOT_TOKEN)

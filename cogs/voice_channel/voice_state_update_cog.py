@@ -13,15 +13,18 @@ class VoiceStateUpdateCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_voice_state_update(self, member, before, after):
-        if before.channel is not None or after.channel is not None:
-            channel = after.channel or before.channel
-            amount_of_members = len(channel.members)
-            new_name = amount_of_members * ":otter:" + self.ending_mapping[str(amount_of_members)]
+        channels = self.filter_channels([before.channel, after.channel])
+        for channel in channels:
+            new_name = await self.calculate_new_name(channel)
             successful = await self.edit_channel_status(str(channel.id), new_name)
             if successful:
                 self.bot.logger.info(f'Changed voice channel name to "{new_name}" for {channel.name}')
             else:
                 self.bot.logger.info(f'Can`t change voice channel name to "{new_name}" for {channel.name}')
+
+    async def calculate_new_name(self, channel):
+        amount_of_members = len(channel.members)
+        return amount_of_members * ":otter:" + self.ending_mapping[str(amount_of_members)]
 
     async def edit_channel_status(self, channel_id, new_name):
         url = f"{VuDrochkaBotConfigs.DISCORD_API_URL}/channels/{channel_id}/voice-status"
@@ -35,6 +38,10 @@ class VoiceStateUpdateCog(commands.Cog):
                     self.bot.logger.error('Body:', response_text)
                     return False
         return True
+
+    @staticmethod
+    def filter_channels(channels):
+        return [channel for channel in channels if channel]
 
 
 def setup(bot):
