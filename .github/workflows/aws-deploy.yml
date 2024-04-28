@@ -3,7 +3,7 @@ name: Deploy to AWS ECS
 on:
   push:
     branches:
-      - main
+      - main  # Set this to the branch you want to deploy from
 
 jobs:
   build-and-deploy:
@@ -38,7 +38,7 @@ jobs:
       with:
         task-definition: task-definition.json
         container-name: vudrochka-bot
-        image: ${{ steps.build-and-push.outputs.image }}
+        image: ${{ steps.build-and-deploy.outputs.IMAGE_URI }}
 
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
