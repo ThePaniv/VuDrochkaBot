@@ -24,13 +24,20 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build, tag, and push Docker image to AWS ECR
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: latest
+      id: build-and-push
       run: |
+        ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG=latest
         IMAGE_URI="${ECR_REGISTRY}/vudrochka-bot:${IMAGE_TAG}"
+        echo "IMAGE_URI=$IMAGE_URI"
         docker build -t $IMAGE_URI .
         docker push $IMAGE_URI
+        echo "::set-output name=image_uri::$IMAGE_URI"
+
+    - name: Set IMAGE_URI as output
+      run: echo "image_uri=${IMAGE_URI}" >> $GITHUB_ENV
+      env:
+        IMAGE_URI: ${{ steps.build-and-push.outputs.image_uri }}
 
     - name: Fill in the new image ID in the ECS task definition
       id: task-def
@@ -46,3 +53,6 @@ jobs:
         service: vudrochka-bot
         cluster: DiscordBots
         task-definition: ${{ steps.task-def.outputs.task-definition }}
+      env:
+        IMAGE_URI: ${{ steps.build-and-push.outputs.image_uri }}
+
