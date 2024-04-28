@@ -38,7 +38,7 @@ jobs:
       with:
         task-definition: task-definition.json
         container-name: vudrochka-bot
-        image: $IMAGE_URI
+        image: ${{ steps.build-and-push.outputs.image }}
 
     - name: Deploy to Amazon ECS
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
