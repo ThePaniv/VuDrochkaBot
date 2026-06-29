@@ -35,14 +35,32 @@ class VoiceStatusCog(commands.Cog):
         if before.channel == after.channel:
             return
 
-        # A move touches two channels; a join/leave touches one. ``dict.fromkeys``
-        # de-duplicates while preserving order and dropping ``None``.
-        for channel in dict.fromkeys((before.channel, after.channel)):
-            if isinstance(channel, discord.VoiceChannel):
-                await self._update_status(channel)
+        # A move fires a single event touching two channels; a join/leave touches
+        # one. Recompute each, but don't trust ``channel.members`` to reflect the
+        # move yet: on a direct move discord can still list the member in the
+        # channel they *left*, which left a stale otter there. So subtract the
+        # member from the channel they left and add them to the one they joined.
+        if isinstance(before.channel, discord.VoiceChannel):
+            await self._update_status(before.channel, left=member)
+        if isinstance(after.channel, discord.VoiceChannel):
+            await self._update_status(after.channel, joined=member)
 
-    async def _update_status(self, channel: discord.VoiceChannel) -> None:
-        status = format_status(len(channel.members))
+    async def _update_status(
+        self,
+        channel: discord.VoiceChannel,
+        *,
+        joined: discord.Member | None = None,
+        left: discord.Member | None = None,
+    ) -> None:
+        # Count from the channel's members, correcting for the in-flight move so
+        # the result doesn't depend on whether discord's cache has caught up yet.
+        member_ids = {m.id for m in channel.members}
+        if joined is not None:
+            member_ids.add(joined.id)
+        if left is not None:
+            member_ids.discard(left.id)
+
+        status = format_status(len(member_ids))
         try:
             await channel.edit(status=status, reason="member count changed")
         except discord.Forbidden:
