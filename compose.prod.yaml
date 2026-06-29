@@ -1,0 +1,23 @@
+# Production compose for the Lightsail host.
+#
+# Unlike compose.yaml (which builds from source for local dev), this runs the
+# pre-built image pulled from ECR — the box never builds. The deploy workflow
+# (.github/workflows/deploy.yml) substitutes __BOT_IMAGE__ with the commit-pinned
+# ECR URI and scps the rendered file to ~/vudrochka/compose.prod.yaml on the box.
+#
+# Do not run this file locally; use compose.yaml instead.
+services:
+  bot:
+    image: __BOT_IMAGE__
+    container_name: vudrochka-bot
+    env_file: .env # holds BOT_TOKEN on the box; never committed
+    restart: unless-stopped
+    pull_policy: always
+    # The bot is a long-lived Discord gateway client with no inbound ports.
+    stop_grace_period: 30s
+    # Cap container logs so they can't fill the disk on a long-running host.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

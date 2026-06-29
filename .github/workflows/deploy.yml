@@ -1,22 +1,26 @@
-name: Deploy to AWS ECS
+name: Deploy to Lightsail
 
+# Builds the image, pushes it to ECR, then has the Lightsail box pull and restart.
+# Trigger: push the commit you want live to the `deploy` branch
+# (e.g. `git push origin develop:deploy`), or run manually.
 on:
   push:
-    branches: [main]
+    branches: [deploy]
   workflow_dispatch:
 
-# OIDC role assumption — no long-lived AWS access keys.
+# OIDC role assumption for ECR — no long-lived AWS access keys.
 permissions:
   id-token: write
   contents: read
 
+# Never run two deploys at once; cancel an in-progress one if a newer push lands.
+concurrency:
+  group: deploy-lightsail
+  cancel-in-progress: false
+
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vudrochka-bot
-  ECS_SERVICE: vudrochka-bot
-  ECS_CLUSTER: DiscordBots
-  ECS_TASK_DEFINITION: task-definition.json
-  CONTAINER_NAME: vudrochka-bot
 
 jobs:
   deploy:
@@ -44,21 +48,49 @@ jobs:
           docker build -t "$IMAGE" -t "$ECR_REGISTRY/$ECR_REPOSITORY:latest" .
           docker push "$IMAGE"
           docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
-          # Pass the immutable, commit-pinned URI to the next step as a proper output.
+          # Pass the immutable, commit-pinned URI to later steps.
           echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
 
-      - name: Render task definition with the new image
-        id: task-def
-        uses: aws-actions/amazon-ecs-render-task-definition@v1
-        with:
-          task-definition: ${{ env.ECS_TASK_DEFINITION }}
-          container-name: ${{ env.CONTAINER_NAME }}
-          image: ${{ steps.build.outputs.image }}
+      - name: Render the production compose file with the new image
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: |
+          sed "s#__BOT_IMAGE__#${IMAGE}#" compose.prod.yaml > compose.deploy.yaml
 
-      - name: Deploy to Amazon ECS
-        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
-        with:
-          task-definition: ${{ steps.task-def.outputs.task-definition }}
-          service: ${{ env.ECS_SERVICE }}
-          cluster: ${{ env.ECS_CLUSTER }}
-          wait-for-service-stability: true
+      - name: Deploy to the Lightsail box over SSH
+        env:
+          SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          SSH_USER: ubuntu # default user for the Lightsail ubuntu_24_04 blueprint
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          set -euo pipefail
+
+          # ECR auth token (valid ~12h) minted on the runner from the OIDC creds,
+          # so the box doesn't need any AWS credentials of its own.
+          ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
+
+          install -m 600 /dev/null deploy_key
+          printf '%s\n' "$SSH_KEY" > deploy_key
+          ssh-keyscan -H "$HOST" >> known_hosts 2>/dev/null
+
+          SSH="ssh -i deploy_key -o UserKnownHostsFile=known_hosts ${SSH_USER}@${HOST}"
+
+          # Ship the rendered compose file (preserves the box's existing .env / BOT_TOKEN).
+          scp -i deploy_key -o UserKnownHostsFile=known_hosts \
+            compose.deploy.yaml "${SSH_USER}@${HOST}:~/vudrochka/compose.prod.yaml"
+
+          # Log in to ECR, pull the pinned image, restart, then prune old images.
+          $SSH "ECR_REGISTRY='${ECR_REGISTRY}' ECR_PASSWORD='${ECR_PASSWORD}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd ~/vudrochka
+          echo "$ECR_PASSWORD" | sudo docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          sudo docker compose -f compose.prod.yaml pull
+          sudo docker compose -f compose.prod.yaml up -d
+          sudo docker image prune -f
+          sudo docker logout "$ECR_REGISTRY" || true
+          REMOTE
+
+      - name: Scrub the SSH key from the runner
+        if: always()
+        run: rm -f deploy_key
