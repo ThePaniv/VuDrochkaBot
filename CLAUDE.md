@@ -81,5 +81,19 @@ docker build -t vudrochka-bot . && docker run --rm vudrochka-bot python -c "impo
 ## Deployment
 
 Runs as a Docker container (`docker compose`, `restart: unless-stopped`) on an **AWS Lightsail**
-instance in eu-central-1. To update: sync source to the box and `docker compose up -d --build`.
-The ECS workflow at `.github/workflows/deploy.yml` is **legacy** (the bot is no longer on Fargate).
+instance in eu-central-1. The bot is **no longer on ECS/Fargate** — do not reintroduce an ECS
+deploy. `task-definition.json` is a leftover from that era and is unused.
+
+**CD pipeline** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)): push the commit
+you want live to the **`deploy` branch** (`git push origin develop:deploy`) — or run the workflow
+manually. It builds the image, pushes it to ECR (`vudrochka-bot`, commit-SHA + `latest` tags), then
+SSHes into the box, renders [compose.prod.yaml](compose.prod.yaml) with the pinned image URI, and
+`docker compose pull && up -d`. **The box never builds** — it pulls the pre-built image; ECR auth is
+a short-lived token minted on the runner (OIDC), so the box holds no AWS credentials.
+
+Required repo secrets: `AWS_DEPLOY_ROLE_ARN` (OIDC role with ECR push perms), `LIGHTSAIL_HOST`
+(public IP), `LIGHTSAIL_SSH_KEY` (private key for `ubuntu@` the box). The box must have
+`~/vudrochka/.env` (holds `BOT_TOKEN`) — it's preserved across deploys, never shipped from CI.
+
+Manual fallback (e.g. CI down): sync source to `~/vudrochka` and `docker compose up -d --build`
+(the dev [compose.yaml](compose.yaml), which builds from source).
