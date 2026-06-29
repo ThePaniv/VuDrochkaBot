@@ -1,14 +1,14 @@
 name: Deploy to Lightsail
 
-# Builds the image, pushes it to ECR, then has the Lightsail box pull and restart.
-# Trigger: push the commit you want live to the `deploy` branch
-# (e.g. `git push origin develop:deploy`), or run manually.
+# Lints + tests, then builds the image, pushes it to ECR, and has the Lightsail
+# box pull and restart. Runs on every push to `develop` (i.e. every merge) and
+# can also be run manually. The deploy only happens if lint + tests pass.
 #
 # No GitHub secrets: AWS is reached via OIDC role assumption, and the deploy
 # target (host + SSH key) is pulled from AWS Secrets Manager at run time.
 on:
   push:
-    branches: [deploy]
+    branches: [develop]
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,27 @@ env:
   DEPLOY_ROLE_ARN: arn:aws:iam::126568927381:role/github-actions-vudrochka-deploy
 
 jobs:
+  # Gate: never deploy code that doesn't lint and pass tests.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.11.25"
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --locked --dev
+      - name: Lint (ruff)
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: Test (pytest)
+        run: uv run pytest
+
   deploy:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

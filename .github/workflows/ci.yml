@@ -1,9 +1,10 @@
 name: CI
 
+# Validates pull requests. Pushes to `develop` are validated by the deploy
+# workflow's test gate instead, so we don't run the same checks twice per merge.
 on:
-  push:
-    branches: [develop, main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
