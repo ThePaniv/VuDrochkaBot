@@ -3,14 +3,16 @@ name: Deploy to Lightsail
 # Builds the image, pushes it to ECR, then has the Lightsail box pull and restart.
 # Trigger: push the commit you want live to the `deploy` branch
 # (e.g. `git push origin develop:deploy`), or run manually.
+#
+# No GitHub secrets: AWS is reached via OIDC role assumption, and the deploy
+# target (host + SSH key) is pulled from AWS Secrets Manager at run time.
 on:
   push:
     branches: [deploy]
   workflow_dispatch:
 
-# OIDC role assumption for ECR — no long-lived AWS access keys.
 permissions:
-  id-token: write
+  id-token: write # assume the AWS role via GitHub OIDC
   contents: read
 
 # Never run two deploys at once; cancel an in-progress one if a newer push lands.
@@ -21,6 +23,10 @@ concurrency:
 env:
   AWS_REGION: eu-central-1
   ECR_REPOSITORY: vudrochka-bot
+  DEPLOY_SECRET_ID: vudrochka-bot/deploy
+  # An ARN is not a secret: it only grants access to principals the role's trust
+  # policy allows (GitHub OIDC from this repo's deploy/develop refs).
+  DEPLOY_ROLE_ARN: arn:aws:iam::126568927381:role/github-actions-vudrochka-deploy
 
 jobs:
   deploy:
@@ -31,7 +37,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ env.DEPLOY_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Log in to Amazon ECR
@@ -59,21 +65,24 @@ jobs:
 
       - name: Deploy to the Lightsail box over SSH
         env:
-          SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
-          HOST: ${{ secrets.LIGHTSAIL_HOST }}
-          SSH_USER: ubuntu # default user for the Lightsail ubuntu_24_04 blueprint
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         run: |
           set -euo pipefail
 
-          # ECR auth token (valid ~12h) minted on the runner from the OIDC creds,
-          # so the box doesn't need any AWS credentials of its own.
+          # Deploy target (host + ubuntu user + default-keypair private key) lives
+          # in Secrets Manager, not in GitHub. Fetch it with the assumed role.
+          SECRET="$(aws secretsmanager get-secret-value \
+            --secret-id "$DEPLOY_SECRET_ID" --region "$AWS_REGION" \
+            --query SecretString --output text)"
+          HOST="$(jq -r '.host' <<<"$SECRET")"
+          SSH_USER="$(jq -r '.user' <<<"$SECRET")"
+          jq -r '.ssh_key' <<<"$SECRET" > deploy_key
+          chmod 600 deploy_key
+
+          # ECR auth token (valid ~12h) minted here so the box needs no AWS creds.
           ECR_PASSWORD="$(aws ecr get-login-password --region "$AWS_REGION")"
 
-          install -m 600 /dev/null deploy_key
-          printf '%s\n' "$SSH_KEY" > deploy_key
           ssh-keyscan -H "$HOST" >> known_hosts 2>/dev/null
-
           SSH="ssh -i deploy_key -o UserKnownHostsFile=known_hosts ${SSH_USER}@${HOST}"
 
           # Ship the rendered compose file (preserves the box's existing .env / BOT_TOKEN).
@@ -91,6 +100,6 @@ jobs:
           sudo docker logout "$ECR_REGISTRY" || true
           REMOTE
 
-      - name: Scrub the SSH key from the runner
+      - name: Scrub fetched secrets from the runner
         if: always()
-        run: rm -f deploy_key
+        run: rm -f deploy_key known_hosts compose.deploy.yaml

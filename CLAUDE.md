@@ -91,9 +91,13 @@ SSHes into the box, renders [compose.prod.yaml](compose.prod.yaml) with the pinn
 `docker compose pull && up -d`. **The box never builds** — it pulls the pre-built image; ECR auth is
 a short-lived token minted on the runner (OIDC), so the box holds no AWS credentials.
 
-Required repo secrets: `AWS_DEPLOY_ROLE_ARN` (OIDC role with ECR push perms), `LIGHTSAIL_HOST`
-(public IP), `LIGHTSAIL_SSH_KEY` (private key for `ubuntu@` the box). The box must have
-`~/vudrochka/.env` (holds `BOT_TOKEN`) — it's preserved across deploys, never shipped from CI.
+**No GitHub secrets.** AWS is reached by assuming the IAM role
+`github-actions-vudrochka-deploy` via GitHub OIDC (the role ARN is hardcoded in the workflow — an
+ARN isn't sensitive; the role's trust policy only allows this repo's `deploy`/`develop` refs). The
+deploy target (host, `ubuntu` user, default-key-pair private key) is a JSON secret
+`vudrochka-bot/deploy` in **AWS Secrets Manager**, fetched at run time. To rotate the IP or key,
+update that secret — no workflow change. The box must have `~/vudrochka/.env` (holds `BOT_TOKEN`) —
+it's preserved across deploys, never shipped from CI (there is no `BOT_TOKEN` in Secrets Manager).
 
 Manual fallback (e.g. CI down): sync source to `~/vudrochka` and `docker compose up -d --build`
 (the dev [compose.yaml](compose.yaml), which builds from source).
