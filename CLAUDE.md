@@ -84,12 +84,13 @@ Runs as a Docker container (`docker compose`, `restart: unless-stopped`) on an *
 instance in eu-central-1. The bot is **no longer on ECS/Fargate** — do not reintroduce an ECS
 deploy. `task-definition.json` is a leftover from that era and is unused.
 
-**CD pipeline** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)): push the commit
-you want live to the **`deploy` branch** (`git push origin develop:deploy`) — or run the workflow
-manually. It builds the image, pushes it to ECR (`vudrochka-bot`, commit-SHA + `latest` tags), then
+**CD pipeline** ([.github/workflows/deploy.yml](.github/workflows/deploy.yml)): runs on **every
+push/merge to `develop`** (or manual dispatch). It first lints + tests (the deploy is gated on that
+passing), then builds the image, pushes it to ECR (`vudrochka-bot`, commit-SHA + `latest` tags),
 SSHes into the box, renders [compose.prod.yaml](compose.prod.yaml) with the pinned image URI, and
 `docker compose pull && up -d`. **The box never builds** — it pulls the pre-built image; ECR auth is
-a short-lived token minted on the runner (OIDC), so the box holds no AWS credentials.
+a short-lived token minted on the runner (OIDC), so the box holds no AWS credentials. ([ci.yml](.github/workflows/ci.yml)
+runs the same lint+test on pull requests; `develop` pushes are covered by the deploy gate.)
 
 **No GitHub secrets.** AWS is reached by assuming the IAM role
 `github-actions-vudrochka-deploy` via GitHub OIDC (the role ARN is hardcoded in the workflow — an
