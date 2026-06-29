@@ -1,2 +1,25 @@
-__pycache__
-venv/
+# Astral requires excluding .venv (it is platform-specific).
+.venv/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# VCS / tooling / editors
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+.ruff_cache/
+.pytest_cache/
+
+# Secrets and local env (never bake these into the image)
+.env
+*.env
+!.env.example
+
+# Dev-only files not needed at runtime
+tests/
+compose.yaml
+Dockerfile
+.dockerignore

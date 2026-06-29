@@ -1,0 +1,15 @@
+services:
+  bot:
+    build: .
+    image: vudrochka-bot:latest
+    container_name: vudrochka-bot
+    env_file: .env
+    restart: unless-stopped
+    # The bot is a long-lived Discord gateway client with no inbound ports.
+    stop_grace_period: 30s
+    # Cap container logs so they can't fill the disk on a long-running host.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
