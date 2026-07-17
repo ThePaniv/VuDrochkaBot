@@ -102,3 +102,17 @@ it's preserved across deploys, never shipped from CI (there is no `BOT_TOKEN` in
 
 Manual fallback (e.g. CI down): sync source to `~/vudrochka` and `docker compose up -d --build`
 (the dev [compose.yaml](compose.yaml), which builds from source).
+
+## Infrastructure (Terraform)
+
+The AWS resources the pipeline depends on are managed as code in [infra/](infra/) — the GitHub
+OIDC provider, the `github-actions-vudrochka-deploy` role + policies, the `vudrochka-bot` ECR repo,
+the `vudrochka-bot/deploy` Secrets Manager secret (container only), and the Lightsail instance.
+Run Terraform from `infra/` (`terraform plan`/`apply`, AWS profile `claude`). Notes:
+
+- **State is local and git-ignored** (it can hold sensitive values); the box + ECR repo carry
+  `prevent_destroy`. Don't commit `*.tfstate` or `.terraform/`.
+- **Secret *values* are not in Terraform** — the deploy secret's payload and the box's `.env` are
+  set out-of-band; TF manages only the secret container.
+- The legacy ECS/Fargate resources are intentionally **not** in Terraform (being decommissioned).
+- Resources were imported (created via CLI first), so `terraform plan` should report no changes.
